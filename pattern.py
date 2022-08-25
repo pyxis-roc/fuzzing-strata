@@ -197,6 +197,31 @@ class BitPattern:
         #TODO: take exclusions into account
         return lex_gen(self.pattern, '1')
 
+def generate_sampler(name, decoder_names, value_ty = 'int32_t', bit_ty = 'uint32_t', static='static '):
+    out = []
+
+    out.append(f"{static}{value_ty} {name}() {{")
+    out.append("  union bit2value {")
+    out.append(f"    {bit_ty} b;")
+    out.append(f"    {value_ty} v;")
+    out.append("   } v;")
+
+    out.append("  uint32_t br;")
+    out.append(f"  br = uniform_sample({len(decoder_names)});")
+
+    out.append("  switch(br) {")
+
+    for i, dec in enumerate(decoder_names):
+        out.append(f"  case {i}:")
+        out.append(f"      v.b = {dec}(uniform_sample({dec}_range));") # assumes dec_range variable exists
+        out.append("      break;")
+
+    out.append("  }")
+    out.append("   return v.v;")
+    out.append("}")
+
+    return "\n".join(out)
+
 
 def test_BitPattern():
     ALL = BitPattern('X XXXX XXXX XXX XXXX XXXX XXXX XXXX XXXX')
