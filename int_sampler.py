@@ -24,6 +24,7 @@ print("#include <stdio.h>")
 print("#include <assert.h>")
 print("#include <math.h>")
 print("#include <stdlib.h>")
+print('#include "unisampler.h"')
 
 count = 0
 for n, d in decoders:
