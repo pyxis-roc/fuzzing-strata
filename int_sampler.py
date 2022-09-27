@@ -28,10 +28,16 @@ def generate_int_sampler(nbits):
     print('#include "unisampler.h"')
 
     count = 0
+
+    range_ty = 'uint32_t' if nbits <= 32 else 'uint64_t'
+    range_top = 2**32 if nbits <= 32 else 2**64
+    sampler = 'uniform_sample' if nbits <= 32 else 'uniform_sample_64'
+
     for n, d in decoders:
         dc = d.count()
-        assert dc < 2**32, f"Out of range: {dc}"
-        print(f"static uint32_t {n}_range = {dc};")
+        assert dc < range_top, f"Out of range for {range_ty}: {dc}"
+        # may not require suffix because literals are sized
+        print(f"static {range_ty} {n}_range = {dc};")
         print(d.decoder_c_code(n, qual="static "))
         count += dc
 
@@ -40,7 +46,8 @@ def generate_int_sampler(nbits):
     assert gen_count == tot_count, f"{gen_count} == {tot_count}"
 
     print(generate_sampler(f"sample_int{nbits}", [d[0] for d in decoders],
-                           value_ty = f"int{nbits}_t"))
+                           value_ty = f"int{nbits}_t",
+                           sampler = sampler))
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Generate signed integer sampler")
@@ -49,4 +56,3 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     generate_int_sampler(args.nbits)
-
