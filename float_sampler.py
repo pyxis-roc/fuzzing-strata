@@ -70,16 +70,20 @@ def gen_gen(ty):
     PNORMALS = BP(GP('0', 'X', 'X'), [PZERO, PSUBNORMALS, NAN, PINF])
     NNORMALS = BP(GP('1', 'X', 'X'), [NZERO, NSUBNORMALS, NAN, NINF])
 
-    decoders = [('pzero', PZERO),
-                ('nzero', NZERO),
-                ('psubnormal', PSUBNORMALS),
-                ('nsubnormal', NSUBNORMALS),
-                ('pinf', PINF),
-                ('ninf', NINF),
-                ('pqnan', PQNAN),
-                ('nqnan', NQNAN),
-                ('pnormal', PNORMALS),
-                ('nnormal', NNORMALS)]
+    pfx = ''
+    if ty.tyname == 'double':
+        pfx = 'dbl_'
+
+    decoders = [(f'{pfx}pzero', PZERO),
+                (f'{pfx}nzero', NZERO),
+                (f'{pfx}psubnormal', PSUBNORMALS),
+                (f'{pfx}nsubnormal', NSUBNORMALS),
+                (f'{pfx}pinf', PINF),
+                (f'{pfx}ninf', NINF),
+                (f'{pfx}pqnan', PQNAN),
+                (f'{pfx}nqnan', NQNAN),
+                (f'{pfx}pnormal', PNORMALS),
+                (f'{pfx}nnormal', NNORMALS)]
 
     gen_decoders(decoders, NAN, ty)
 

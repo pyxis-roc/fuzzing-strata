@@ -39,7 +39,7 @@ def generate_uint_sampler(nbits):
     tot_count = 2**nbits
     assert gen_count == tot_count, f"{gen_count} == {tot_count}"
 
-    print(generate_sampler(f"sample_uint{nbits}", [d[0] for d in decoders],
+    print(generate_sampler(f"sample_uint{nbits}_t", [d[0] for d in decoders],
                            value_ty = f"uint{nbits}_t",
                            sampler = sampler))
 
