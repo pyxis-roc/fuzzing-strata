@@ -1,40 +1,52 @@
 #!/usr/bin/env python3
 
 from pattern import BitPattern as BP, generate_sampler
+import argparse
 
-MIN = BP('1'*32)
-ZERO = BP('0'*32)
-ONE = BP('0'*31 + '1')
-MAX = BP('0' + '1'*31)
+def generate_int_sampler(nbits):
+    MIN = BP('1'*nbits)
+    ZERO = BP('0'*nbits)
+    ONE = BP('0'*(nbits-1) + '1')
+    MAX = BP('0' + '1'*(nbits - 1))
 
-NEG = BP('1' + 'X'*31, [MIN])
-POS = BP('0' + 'X'*31, [ZERO, ONE, MAX])
+    NEG = BP('1' + 'X'*(nbits - 1), [MIN])
+    POS = BP('0' + 'X'*(nbits - 1), [ZERO, ONE, MAX])
 
+    decoders = [(f'int{nbits}_min', MIN),
+                (f'int{nbits}_zero', ZERO),
+                (f'int{nbits}_one', ONE),
+                (f'int{nbits}_neg', NEG),
+                (f'int{nbits}_pos', POS),
+                (f'int{nbits}_max', MAX)]
 
-decoders = [('int32_min', MIN),
-            ('int32_zero', ZERO),
-            ('int32_one', ONE),
-            ('int32_neg', NEG),
-            ('int32_pos', POS),
-            ('int32_max', MAX)]
+    print("#pragma once")
+    print("#include <stdint.h>")
+    print("#include <stdio.h>")
+    print("#include <assert.h>")
+    print("#include <math.h>")
+    print("#include <stdlib.h>")
+    print('#include "unisampler.h"')
 
-print("#pragma once")
-print("#include <stdint.h>")
-print("#include <stdio.h>")
-print("#include <assert.h>")
-print("#include <math.h>")
-print("#include <stdlib.h>")
-print('#include "unisampler.h"')
+    count = 0
+    for n, d in decoders:
+        dc = d.count()
+        assert dc < 2**32, f"Out of range: {dc}"
+        print(f"static uint32_t {n}_range = {dc};")
+        print(d.decoder_c_code(n, qual="static "))
+        count += dc
 
-count = 0
-for n, d in decoders:
-    print(f"static uint32_t {n}_range = {d.count()};")
-    print(d.decoder_c_code(n, qual="static "))
-    count += d.count()
+    gen_count = count
+    tot_count = 2**nbits
+    assert gen_count == tot_count, f"{gen_count} == {tot_count}"
 
-gen_count = count
-tot_count = 2**32
-assert gen_count == tot_count, f"{gen_count} == {tot_count}"
+    print(generate_sampler(f"sample_int{nbits}", [d[0] for d in decoders],
+                           value_ty = f"int{nbits}_t"))
 
-print(generate_sampler("sample_int32", [d[0] for d in decoders],
-                       value_ty = "int32_t"))
+if __name__ == "__main__":
+    p = argparse.ArgumentParser(description="Generate signed integer sampler")
+    p.add_argument("nbits", help="Number of bits", type=int, choices=[8, 16, 32, 64])
+
+    args = p.parse_args()
+
+    generate_int_sampler(args.nbits)
+
