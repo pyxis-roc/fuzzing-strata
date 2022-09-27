@@ -214,7 +214,7 @@ def generate_sampler(name, decoder_names, value_ty = 'int32_t', bit_ty = 'uint32
 
     for i, dec in enumerate(decoder_names):
         out.append(f"  case {i}:")
-        out.append(f"      v.b = {dec}(uniform_sample({dec}_range));") # assumes dec_range variable exists
+        out.append(f"      v.b = {dec}({sampler}({dec}_range));") # assumes dec_range variable exists
         out.append("      break;")
 
     out.append("  }")

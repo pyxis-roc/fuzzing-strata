@@ -1,46 +1,106 @@
 #!/usr/bin/env python3
 
-from pattern import BitPattern as BP
+from pattern import BitPattern as BP, generate_sampler
+import argparse
 
+class F32:
+    EXP = 8
+    SIGNIFICAND = 23
+    TOTAL = 32
+    tyname = 'float'
 
-PZERO = BP('0  0000 0000  000 0000 0000 0000 0000 0000')
-NZERO = BP('1  0000 0000  000 0000 0000 0000 0000 0000')
+class F64:
+    EXP = 11
+    SIGNIFICAND = 52
+    TOTAL = 64
+    tyname = 'double'
 
-PSUBNORMALS = BP('0  0000 0000  XXX XXXX XXXX XXXX XXXX XXXX', [PZERO])
-NSUBNORMALS = BP('1  0000 0000  XXX XXXX XXXX XXXX XXXX XXXX', [NZERO])
+def gen_decoders(decoders, NAN, ty):
+    count = 0
+    nbits = ty.TOTAL
 
-PINF = BP('0 1111 1111 000 0000 0000 0000 0000 0000')
-NINF = BP('1 1111 1111 000 0000 0000 0000 0000 0000')
+    # this picks the same type for all ranges
+    range_ty = 'uint32_t' if nbits <= 32 else 'uint64_t'
+    range_top = 2**32 if nbits <= 32 else 2**64
+    sampler = 'uniform_sample' if nbits <= 32 else 'uniform_sample_64'
 
-NAN = BP('X 1111 1111 XXX XXXX XXXX XXXX XXXX XXXX', [PINF, NINF])
+    for n, d in decoders:
+        dc = d.count()
+        assert dc < range_top, f"Out of range for {range_ty}: {dc}"
+        print(f"static {range_ty} {n}_range = {dc};")
+        print(d.decoder_c_code(n, qual="static "))
+        count += dc
 
-PNAN = BP('0 1111 1111 XXX XXXX XXXX XXXX XXXX XXXX', [PINF])
-NNAN = BP('1 1111 1111 XXX XXXX XXXX XXXX XXXX XXXX', [NINF])
+    gen_count = count - 2 + NAN.count()
+    tot_count = 2**nbits
+    assert gen_count == tot_count, f"{gen_count} == {tot_count}"
 
-PQNAN = BP('0 1111 1111 100 0000 0000 0000 0000 0000')
-NQNAN = BP('1 1111 1111 100 0000 0000 0000 0000 0000')
+    print(generate_sampler(f"sample_{ty.tyname}", [d[0] for d in decoders],
+                           value_ty = ty.tyname,
+                           sampler = sampler))
 
-PNORMALS = BP('0 XXXX XXXX XXX XXXX XXXX XXXX XXXX XXXX', [PZERO, PSUBNORMALS, NAN, PINF])
-NNORMALS = BP('1 XXXX XXXX XXX XXXX XXXX XXXX XXXX XXXX', [NZERO, NSUBNORMALS, NAN, NINF])
+def gen_gen(ty):
+    def gen_pattern(sign_bit, exp_bit, significand_bit, ty):
+        assert len(sign_bit) == 1
+        assert len(exp_bit) == 1
+        assert len(sign_bit) == 1
 
+        return sign_bit + exp_bit * ty.EXP + significand_bit * ty.SIGNIFICAND
 
-decoders = [('pzero', PZERO),
-            ('nzero', NZERO),
-            ('psubnormal', PSUBNORMALS),
-            ('nsubnormal', NSUBNORMALS),
-            ('pinf', PINF),
-            ('ninf', NINF),
-            ('pqnan', PQNAN),
-            ('nqnan', NQNAN),
-            ('pnormal', PNORMALS),
-            ('nnormal', NNORMALS)]
+    GP = lambda x, y,z : gen_pattern(x, y, z, ty)
+    nbits = ty.TOTAL
 
-count = 0
-for n, d in decoders:
-    print(f"static uint32_t {n}_range = {d.count()};")
-    print(d.decoder_c_code(n, qual="static "))
-    count += d.count()
+    PZERO = BP(GP('0', '0', '0'))
+    NZERO = BP(GP('1', '0', '0'))
 
-gen_count = count - 2 + NAN.count()
-tot_count = 2**32
-assert gen_count == tot_count, f"{gen_count} == {tot_count}"
+    PSUBNORMALS = BP(GP('0', '0', 'X'), [PZERO])
+    NSUBNORMALS = BP(GP('1', '0', 'X'), [NZERO])
+
+    PINF = BP(GP('0', '1', '0'))
+    NINF = BP(GP('1', '1', '0'))
+
+    NAN = BP(GP('X', '1', 'X'), [PINF, NINF])
+
+    PNAN = BP(GP('0', '1', 'X'), [PINF])
+    NNAN = BP(GP('1', '1', 'X'), [NINF])
+
+    PQNAN = BP('0' + '1'*ty.EXP + '1' + '0'*(ty.SIGNIFICAND-1))
+    NQNAN = BP('1' + '1'*ty.EXP + '1' + '0'*(ty.SIGNIFICAND-1))
+
+    PNORMALS = BP(GP('0', 'X', 'X'), [PZERO, PSUBNORMALS, NAN, PINF])
+    NNORMALS = BP(GP('1', 'X', 'X'), [NZERO, NSUBNORMALS, NAN, NINF])
+
+    decoders = [('pzero', PZERO),
+                ('nzero', NZERO),
+                ('psubnormal', PSUBNORMALS),
+                ('nsubnormal', NSUBNORMALS),
+                ('pinf', PINF),
+                ('ninf', NINF),
+                ('pqnan', PQNAN),
+                ('nqnan', NQNAN),
+                ('pnormal', PNORMALS),
+                ('nnormal', NNORMALS)]
+
+    gen_decoders(decoders, NAN, ty)
+
+def gen_f32():
+    ty = F32()
+    gen_gen(ty)
+
+def gen_f64():
+    ty = F64()
+    gen_gen(ty)
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser(description="Generate float samplers")
+    p.add_argument("ty", help="Float type", choices=["f32", "f64"])
+
+    args = p.parse_args()
+
+    if args.ty == "f32":
+        gen_f32()
+    elif args.ty == "f64":
+        gen_f64()
+    else:
+        raise NotImplementedError(f"Float type {args.ty} not supported yet")
+
